@@ -6,34 +6,72 @@ using System.Text;
 
 namespace virtual_socket
 {
-    internal class Client
+    public class Client
     {
         IPAddress serverAddress;
         int serverPort;
+
+        ReliabilityLayer rl = new ReliabilityLayer();
 
         public Client() { }
 
         public Client(string address, int port)
         {
-            ConnectToSocket(address, port);
+            AddAddress(address, port);
         }
 
-        private void ConnectToSocket(string address, int port)
+        public void AddAddress(string address, int port)
         {
             serverAddress = IPAddress.Parse(address);
             serverPort = port;
+            rl.CreateUdpSocket();
         }
 
         public void SendMessage(string message)
         {
-            using (Socket soc = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
-            {
-                IPEndPoint iep = new IPEndPoint(serverAddress, serverPort);
-                EndPoint ep = (EndPoint)iep;
+            byte ack;
 
-                byte[] viesti = Encoding.UTF8.GetBytes(message + "\n");
-                soc.SendTo(viesti, ep);
+            do
+            {
+                rl.SendPacket(message, serverAddress, serverPort);
+                ack = rl.WaitForAck();
             }
+            while (ack != (byte)0);
+        }
+
+        public void SendMessageWithBitError(string message)
+        {
+            // rl.SendPacketWithBitError(message, serverAddress, serverPort);
+
+            // rl.WaitForAck();
+
+            do
+            {
+                rl.SendPacketWithBitError(message, serverAddress, serverPort);
+            }
+            while (!(rl.WaitForAck()).Equals((byte)0));
+        }
+
+        public byte[] ReceiveAck()
+        {
+            byte[] rec = new byte[1];
+            int howMany = rl.socket.Receive(rec);
+
+            return rec;
+        }
+
+        public static byte[] JoinArrays(byte[] firstArray, byte[] secondArray)
+        {
+            byte[] finalArray = new byte[firstArray.Length + secondArray.Length];
+            System.Buffer.BlockCopy(firstArray, 0, finalArray, 0, firstArray.Length);
+            System.Buffer.BlockCopy(secondArray, 0, finalArray, firstArray.Length, secondArray.Length);
+
+            return finalArray;
+        }
+
+        public void CloseSocket()
+        {
+            rl.CloseSocket();
         }
     }
 }
